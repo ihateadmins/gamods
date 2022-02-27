@@ -20,10 +20,28 @@
 #include <fstream>
 #include "detours.h"
 
+struct FFieldNetCache {
+	UField* field1;
+	int netindex;
+	int dummy;
+};
+
+struct FClassNetCache {
+	int field1;
+	int field2;
+	int field3;
+	int FieldsBase;
+	FClassNetCache *Super;
+	int RepConditionCount;
+	int field4;
+	TArray<FFieldNetCache>* Fields;
+	int FieldsNum;
+	int field6;
+};
+
 bool hackswitch = true;
 HMODULE hModuleglobal;
-//typedef int* (__thiscall* myfunc)(DWORD* thisxx, DWORD* a2);
-typedef int* (__thiscall* myfunc)(DWORD* thisxx, UClass* myclass);
+typedef FClassNetCache* (__thiscall* myfunc)(DWORD* thisxx, UClass* myclass);
 myfunc RealGetClassNetCacheFunction;
 
 #include <map>
@@ -68,28 +86,45 @@ void writefile(std::string output, bool newline = 0) {
 	myfile.close();
 }
 
-//int* __fastcall fakeGetClassNetCacheFunction(DWORD* thisxx, void*, DWORD* a2)
-int* __fastcall fakeGetClassNetCacheFunction(DWORD* thisxx, void*, UClass* myclass)
-{
-	struct FFieldNetCache {
-		UField* field1;
-		int netindex;
-		int dummy;
-	};
+bool inHook = false;
 
-	TArray<FFieldNetCache>* RepProperties;
-	int* results = RealGetClassNetCacheFunction(thisxx, myclass);
-	std::string inclassname = myclass->GetName();
-	if (knownclasses.count(inclassname) == 0) {//issue will only get class and its members once and no updating further.
-		writefile(std::string(myclass->GetName()) + std::string(" ") + std::to_string(myclass->NetIndex), true);
-		RepProperties = (TArray<FFieldNetCache>*)(results + 7);
-		for (int i = 0; i < RepProperties->Count; ++i) {
-			writefile(std::string("    ") + std::string((*RepProperties)(i).field1->GetName()) + std::string(" ") + std::to_string((*RepProperties)(i).netindex), true);
-		}
-		knownclasses[inclassname] = true;
+void writefields(FClassNetCache *classNetCache)
+{
+	if(classNetCache->Super)
+	{
+		writefields(classNetCache->Super);
 	}
 
-	return results;
+	TArray<FFieldNetCache>* RepProperties = classNetCache->Fields;
+	for (int i = 0; i < RepProperties->Count; ++i) {
+		writefile(std::string("    ") + std::string((*RepProperties)(i).field1->GetName()) + std::string(" ") + std::to_string((*RepProperties)(i).netindex), true);
+	}
+}
+
+FClassNetCache* __fastcall fakeGetClassNetCacheFunction(DWORD* thisxx, void*, UClass* myclass)
+{
+	FClassNetCache* Result;
+	if(inHook)
+	{
+		Result = RealGetClassNetCacheFunction(thisxx, myclass);
+	}
+	else
+	{
+		inHook = true;
+
+		Result = RealGetClassNetCacheFunction(thisxx, myclass);
+		std::string inclassname = myclass->GetName();
+		if (knownclasses.count(inclassname) == 0) {//issue will only get class and its members once and no updating further.
+			writefile(std::string(myclass->GetName()) + std::string(" ") + std::to_string(myclass->NetIndex), true);
+			knownclasses[inclassname] = true;
+
+			writefields(Result);
+		}
+
+		inHook = false;
+	}
+
+	return Result;
 }
 
 FColor MakeColor(int R, int G, int B, int A)
