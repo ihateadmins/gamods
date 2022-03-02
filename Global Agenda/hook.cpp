@@ -11,7 +11,6 @@
 #include <time.h>
 #include <math.h>
 
-
 #include "vmthooks.h"
 #include "Utils.h"
 
@@ -19,6 +18,10 @@
 #include <string>
 #include <fstream>
 #include "detours.h"
+#include <sstream>
+
+bool hackswitch = true;
+HMODULE hModuleglobal;
 
 struct FFieldNetCache {
 	UField* field1;
@@ -31,18 +34,16 @@ struct FClassNetCache {
 	int field2;
 	int field3;
 	int FieldsBase;
-	FClassNetCache *Super;
+	FClassNetCache* Super;
 	int RepConditionCount;
 	int field4;
-	TArray<FFieldNetCache>* Fields;
+	TArray<FFieldNetCache> Fields;
 	int FieldsNum;
 	int field6;
 };
 
-bool hackswitch = true;
-HMODULE hModuleglobal;
 typedef FClassNetCache* (__thiscall* myfunc)(DWORD* thisxx, UClass* myclass);
-myfunc RealGetClassNetCacheFunction;
+myfunc realGetClassNetCacheFunction;
 
 #include <map>
 std::map <std::string, bool> knownclasses;
@@ -75,6 +76,7 @@ toolkit::VMTHook* globalhook;
 #define GNames_Mask				"xx????xxxxx"
 #define GNames_Offset			0x2
 
+bool inHook = false;
 
 void writefile(std::string output, bool newline = 0) {
 	std::ofstream myfile;
@@ -86,46 +88,45 @@ void writefile(std::string output, bool newline = 0) {
 	myfile.close();
 }
 
-bool inHook = false;
-
-void writefields(FClassNetCache *classNetCache)
+void writefields(FClassNetCache* classNetCache)
 {
-	if(classNetCache->Super)
-	{
+	if (classNetCache->Super){
 		writefields(classNetCache->Super);
 	}
 
-	TArray<FFieldNetCache>* RepProperties = classNetCache->Fields;
-	for (int i = 0; i < RepProperties->Count; ++i) {
-		writefile(std::string("    ") + std::string((*RepProperties)(i).field1->GetName()) + std::string(" ") + std::to_string((*RepProperties)(i).netindex), true);
+	for (int i = 0; i < classNetCache->Fields.Count; ++i) {
+		writefile(std::string("    ") + std::string(classNetCache->Fields(i).field1->GetName()) + std::string(" ") + std::to_string(classNetCache->Fields(i).netindex), true);
 	}
 }
 
 FClassNetCache* __fastcall fakeGetClassNetCacheFunction(DWORD* thisxx, void*, UClass* myclass)
 {
 	FClassNetCache* Result;
-	if(inHook)
-	{
-		Result = RealGetClassNetCacheFunction(thisxx, myclass);
-	}
-	else
-	{
-		inHook = true;
-
-		Result = RealGetClassNetCacheFunction(thisxx, myclass);
-		std::string inclassname = myclass->GetName();
+	std::string inclassname = myclass->GetName();
+	if (inHook){
+		Result = realGetClassNetCacheFunction(thisxx, myclass);
 		if (knownclasses.count(inclassname) == 0) {//issue will only get class and its members once and no updating further.
-			writefile(std::string(myclass->GetName()) + std::string(" ") + std::to_string(myclass->NetIndex), true);
+			std::stringstream ss;
+			ss << inclassname << ":0x" << std::hex << Result;
+			writefile(ss.str(), true);
 			knownclasses[inclassname] = true;
-
-			writefields(Result);
 		}
-
+	}
+	else{
+		inHook = true;
+		Result = realGetClassNetCacheFunction(thisxx, myclass);
+		if (knownclasses.count(inclassname) == 0) {//issue will only get class and its members once and no updating further.
+			writefile(std::string(inclassname) + std::string(" ") + std::to_string(myclass->NetIndex), true);
+			knownclasses[inclassname] = true;
+			writefields(Result);
+			
+		}
 		inHook = false;
 	}
-
+	//return results;
 	return Result;
 }
+
 
 FColor MakeColor(int R, int G, int B, int A)
 {
@@ -217,25 +218,19 @@ void Draw(UCanvas* Canvas, ATgPlayerController* Controller, FVector CameraLocati
 {
 	DrawCossHair(Canvas, ColorBlue);
 
-	if (Canvas == NULL || Controller == NULL || Controller->WorldInfo == NULL || Controller->WorldInfo->PawnList == NULL || Pawn == NULL)
-		return;
-
 	if (GetAsyncKeyState(VK_NUMPAD0)) {
 		static bool firstrun = true;
-		if (firstrun) {/*
-			for (int i = 0; i < UObject::GObjObjects()->Count; ++i) {
-				UObject* Object = UObject::GObjObjects()->Data[i];
-				if(Object)
-					//writefile(std::string(Object->GetFullName()) + " " + std::to_string(Object->NetIndex), true);
-					writefile(std::string(Object->GetFullName()) + " " + std::to_string(Object->LinkerIndex.Dummy), true);
-			}*/
-			RealGetClassNetCacheFunction = (myfunc)DetourFunction((PBYTE)0x11365C30, (PBYTE)fakeGetClassNetCacheFunction);
+		if (firstrun) {
+			realGetClassNetCacheFunction = (myfunc)DetourFunction((PBYTE)0x11365C30, (PBYTE)fakeGetClassNetCacheFunction);
 
 			firstrun = false;
 		}
 	}
 
-	if (GetAsyncKeyState(VK_END)){
+	if (Canvas == NULL || Controller == NULL || Controller->WorldInfo == NULL || Controller->WorldInfo->PawnList == NULL || Pawn == NULL)
+		return;
+
+	if (GetAsyncKeyState(VK_END)) {
 		Unhookmodule();
 	}
 }
@@ -258,7 +253,7 @@ void PostRender(UCanvas* pCanvas)
 		hackswitch = !hackswitch;
 	}
 
-	if (hackswitch){
+	if (hackswitch) {
 		Draw(pCanvas, TgController, CameraLocation, CameraRotation, Pawn);
 	}
 }
