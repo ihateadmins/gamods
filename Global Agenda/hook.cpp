@@ -36,7 +36,7 @@ struct FClassNetCache {
 	int FieldsBase;
 	FClassNetCache* Super;
 	int RepConditionCount;
-	int field4;
+	UClass *Class;
 	TArray<FFieldNetCache> Fields;
 	int FieldsNum;
 	int field6;
@@ -95,7 +95,9 @@ void writefields(FClassNetCache* classNetCache)
 	}
 
 	for (int i = 0; i < classNetCache->Fields.Count; ++i) {
-		writefile(std::string("    ") + std::string(classNetCache->Fields(i).field1->GetName()) + std::string(" ") + std::to_string(classNetCache->Fields(i).netindex), true);
+		std::string fieldName(classNetCache->Fields(i).field1->GetName());
+		std::string className(classNetCache->Class->GetName());
+		writefile(std::string("    ") + fieldName + " " + std::to_string(classNetCache->Fields(i).netindex) + " " + className, true);
 	}
 }
 
