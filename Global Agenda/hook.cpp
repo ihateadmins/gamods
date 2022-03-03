@@ -108,9 +108,6 @@ FClassNetCache* __fastcall fakeGetClassNetCacheFunction(DWORD* thisxx, void*, UC
 	if (inHook){
 		Result = realGetClassNetCacheFunction(thisxx, myclass);
 		if (knownclasses.count(inclassname) == 0) {//issue will only get class and its members once and no updating further.
-			std::stringstream ss;
-			ss << inclassname << ":0x" << std::hex << Result;
-			writefile(ss.str(), true);
 			knownclasses[inclassname] = true;
 		}
 	}
