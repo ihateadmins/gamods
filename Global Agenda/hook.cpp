@@ -48,6 +48,9 @@ myfunc realGetClassNetCacheFunction;
 typedef UObject* (__thiscall * CreateExportFunc)(DWORD* thisxx,  INT Index );
 CreateExportFunc realCreateExportFunc;
 
+typedef UObject* (__thiscall * IndexToObjectFunc)(DWORD* thisxx,  INT Index, int Load );
+IndexToObjectFunc realIndexToObjectFunc;
+
 #include <map>
 std::map <std::string, bool> knownclasses;
 
@@ -132,6 +135,18 @@ FClassNetCache* __fastcall fakeGetClassNetCacheFunction(DWORD* thisxx, void*, UC
 UObject* __fastcall fakeCreateExportFunc(DWORD* thisxx, void*, int index)
 {
 	UObject *pObject = realCreateExportFunc(thisxx, index);
+	char *pName = 0;
+	if(pObject)
+	{
+		pName = pObject->GetName();
+	}
+	writefile(std::string(pName ? pName : "null") + " -> " + std::to_string(index), true);
+	return pObject;
+}
+
+UObject* __fastcall fakeIndexToObjectFunc(DWORD* thisxx, void*, int index, int load)
+{
+	UObject *pObject = realIndexToObjectFunc(thisxx, index, load);
 	char *pName = 0;
 	if(pObject)
 	{
@@ -236,7 +251,8 @@ void Draw(UCanvas* Canvas, ATgPlayerController* Controller, FVector CameraLocati
 		static bool firstrun = true;
 		if (firstrun) {
 			realGetClassNetCacheFunction = (myfunc)DetourFunction((PBYTE)0x11365C30, (PBYTE)fakeGetClassNetCacheFunction);
-			realCreateExportFunc = (CreateExportFunc)DetourFunction((PBYTE)0x11307100, (PBYTE)fakeCreateExportFunc);
+			//realCreateExportFunc = (CreateExportFunc)DetourFunction((PBYTE)0x11307100, (PBYTE)fakeCreateExportFunc);
+			realIndexToObjectFunc = (IndexToObjectFunc)DetourFunction((PBYTE)0x11364780, (PBYTE)fakeIndexToObjectFunc);
 
 			firstrun = false;
 		}
