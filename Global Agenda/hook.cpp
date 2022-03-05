@@ -45,6 +45,9 @@ struct FClassNetCache {
 typedef FClassNetCache* (__thiscall* myfunc)(DWORD* thisxx, UClass* myclass);
 myfunc realGetClassNetCacheFunction;
 
+typedef UObject* (__thiscall * CreateExportFunc)(DWORD* thisxx,  INT Index );
+CreateExportFunc realCreateExportFunc;
+
 #include <map>
 std::map <std::string, bool> knownclasses;
 
@@ -124,6 +127,18 @@ FClassNetCache* __fastcall fakeGetClassNetCacheFunction(DWORD* thisxx, void*, UC
 	}
 	//return results;
 	return Result;
+}
+
+UObject* __fastcall fakeCreateExportFunc(DWORD* thisxx, void*, int index)
+{
+	UObject *pObject = realCreateExportFunc(thisxx, index);
+	char *pName = 0;
+	if(pObject)
+	{
+		pName = pObject->GetName();
+	}
+	writefile(std::string(pName ? pName : "null") + " -> " + std::to_string(index), true);
+	return pObject;
 }
 
 
@@ -221,6 +236,7 @@ void Draw(UCanvas* Canvas, ATgPlayerController* Controller, FVector CameraLocati
 		static bool firstrun = true;
 		if (firstrun) {
 			realGetClassNetCacheFunction = (myfunc)DetourFunction((PBYTE)0x11365C30, (PBYTE)fakeGetClassNetCacheFunction);
+			realCreateExportFunc = (CreateExportFunc)DetourFunction((PBYTE)0x11307100, (PBYTE)fakeCreateExportFunc);
 
 			firstrun = false;
 		}
