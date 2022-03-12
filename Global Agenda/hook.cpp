@@ -51,6 +51,9 @@ CreateExportFunc realCreateExportFunc;
 typedef UObject* (__thiscall * IndexToObjectFunc)(DWORD* thisxx,  INT Index, int Load );
 IndexToObjectFunc realIndexToObjectFunc;
 
+typedef void (__thiscall * ObjectToIndexFunc)(DWORD* thisxx, INT *pResult, UObject *Object);
+ObjectToIndexFunc realObjectToIndexFunc;
+
 #include <map>
 std::map <std::string, bool> knownclasses;
 
@@ -109,7 +112,58 @@ void writefields(FClassNetCache* classNetCache)
 
 FClassNetCache* __fastcall fakeGetClassNetCacheFunction(DWORD* thisxx, void*, UClass* myclass)
 {
-	FClassNetCache* Result;
+	FClassNetCache* Result = 0;
+	static bool classesWritten = false;
+#if 0
+	for ( int i = 0; i < UObject::GObjObjects()->Count; ++i ) 
+	{ 
+		UObject* Object = UObject::GObjObjects()->Data[ i ]; 
+
+		if ( ! Object ) 
+			continue; 
+
+		if(!strcmp(Object->Class->GetName(), "Class"))
+		{
+			INT index = 0;
+			realObjectToIndexFunc(thisxx + 0x21, &index, Object);
+			writefile(std::to_string(i) + std::string(": ") + Object->GetFullName() + " " + std::to_string(index), true);
+		}
+	}
+#else
+	if(inHook)
+	{
+		Result = realGetClassNetCacheFunction(thisxx, myclass);
+	}
+	else
+	{
+		inHook = true;
+		if(!classesWritten)
+		{
+			for(int i = 0; i < 400000; i++)
+			{
+				UObject *Object = realIndexToObjectFunc(thisxx, i, 0);
+				if(Object)
+				{
+					if(!strcmp(Object->Class->GetName(), "Class"))
+					{
+						UClass *tmpclass = (UClass *)Object;
+						FClassNetCache* cache = realGetClassNetCacheFunction(thisxx, tmpclass);
+						writefile(std::string(tmpclass->GetName()) + std::string(" ") + std::to_string(i + 1), true);
+						writefields(cache);
+					}
+				}
+			}
+			classesWritten = true;
+		}
+		Result = realGetClassNetCacheFunction(thisxx, myclass);
+		inHook = false;
+	}
+#endif
+
+
+
+
+#if 0
 	std::string inclassname = myclass->GetName();
 	if (inHook){
 		Result = realGetClassNetCacheFunction(thisxx, myclass);
@@ -129,6 +183,7 @@ FClassNetCache* __fastcall fakeGetClassNetCacheFunction(DWORD* thisxx, void*, UC
 		inHook = false;
 	}
 	//return results;
+#endif
 	return Result;
 }
 
@@ -147,15 +202,24 @@ UObject* __fastcall fakeCreateExportFunc(DWORD* thisxx, void*, int index)
 UObject* __fastcall fakeIndexToObjectFunc(DWORD* thisxx, void*, int index, int load)
 {
 	UObject *pObject = realIndexToObjectFunc(thisxx, index, load);
+#if 0
 	char *pName = 0;
 	if(pObject)
 	{
 		pName = pObject->GetName();
 	}
 	writefile(std::string(pName ? pName : "null") + " -> " + std::to_string(index), true);
+#endif
 	return pObject;
 }
 
+/*
+INT __fastcall fakeObjectToIndexFunc(DWORD* thisxx, void*, UObject *Object)
+{
+	INT index = realObjectToIndexFunc(thisxx, Object);
+	return index;
+}
+*/
 
 FColor MakeColor(int R, int G, int B, int A)
 {
@@ -253,6 +317,8 @@ void Draw(UCanvas* Canvas, ATgPlayerController* Controller, FVector CameraLocati
 			realGetClassNetCacheFunction = (myfunc)DetourFunction((PBYTE)0x11365C30, (PBYTE)fakeGetClassNetCacheFunction);
 			//realCreateExportFunc = (CreateExportFunc)DetourFunction((PBYTE)0x11307100, (PBYTE)fakeCreateExportFunc);
 			realIndexToObjectFunc = (IndexToObjectFunc)DetourFunction((PBYTE)0x11364780, (PBYTE)fakeIndexToObjectFunc);
+			//realObjectToIndexFunc = (ObjectToIndexFunc)DetourFunction((PBYTE)0x110703e0, (PBYTE)fakeObjectToIndexFunc);
+			realObjectToIndexFunc = (ObjectToIndexFunc)0x110703e0;
 
 			firstrun = false;
 		}
