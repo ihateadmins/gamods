@@ -89,7 +89,7 @@ bool inHook = false;
 
 void writefile(std::string output, bool newline = 0) {
 	std::ofstream myfile;
-	myfile.open("gadlloutput.txt", std::ios::out | std::ios::app);
+	myfile.open("replication_info.txt", std::ios::out | std::ios::app);
 	myfile << output;
 	if (newline) {
 		myfile << "\n";
